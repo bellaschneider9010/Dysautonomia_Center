@@ -1,8 +1,10 @@
 import pandas as pd
 rnfl=pd.read_csv("rnfl.csv")
 
+#total average is the average of OD and OS
 rnfl["Total Avgs"]=(rnfl["Average OD"]+rnfl["Average OS"])/2
 
+# creating separate DataFrames for each diagnosis
 controls=rnfl.drop(rnfl[rnfl["Diagnosis"]!="Control"].index,inplace=False)
 
 rbd_paf=rnfl.drop(rnfl[rnfl["Diagnosis"]!="RBD_PAF"].index,inplace=False)
@@ -12,7 +14,7 @@ msa=rnfl.drop(rnfl[rnfl["Diagnosis"]!="MSA"].index,inplace=False)
 # find the n of each diagnosis
 print(len(controls), len(rbd_paf), len(msa))
 
-#n% of males
+# n% of males
 nmcontrols=len(controls.loc[controls["Gender"]=="Male"])
 print(nmcontrols/len(controls)*100)
 

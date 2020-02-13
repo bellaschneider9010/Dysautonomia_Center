@@ -1,7 +1,7 @@
 #%%
 # IMPORTANT INFORMATION:
 # Multiple System Atrophy (MSA)  is rare disease that is similar to Parkinson's, Disease (PD)  but presents differently in certain ways. For example, the disease progresses much faster than PD, and patients with MSA often don't respond to medications to treat motor symptoms (like Levadopa-Carbidopa). In this code, I am comparing differences in data between patients at study enrollment with MSA-P and MSA-C, which are the two sub-types (Parkinson's and Cerebellar, respectively).
-# This source code was used to fill out slides for a presentation. To see the relevant slides, please see MSA-C vs MSA-P (Sample).ppt
+# This source code was used to fill out slides for a presentation. To see the relevant slides, please see MSA-C vs MSA-P (Sample).pptx
 from IPython.core.interactiveshell import InteractiveShell
 InteractiveShell.ast_node_interactivity = "all"
 import pandas as pd

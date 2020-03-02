@@ -1,4 +1,5 @@
 #%%
+# This code compares blood pressure measures from the Tilt Test between patients with different diagnoses. Results of the one-way ANOVA, Tukey-Kramer, and T-test have been put in dictionaries.
 from IPython.core.interactiveshell import InteractiveShell
 InteractiveShell.ast_node_interactivity = "all"
 import pandas as pd

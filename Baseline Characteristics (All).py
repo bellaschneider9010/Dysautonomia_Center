@@ -107,14 +107,20 @@ SH_df_MSA = SH_df_MSA.join(df_MSAP)
 SH_df_MSA = SH_df_MSA.rename(index = {0 : "has SH", 1 : "no SH"})
 stats.chi2_contingency(observed=SH_df_MSA)
 #%%
+count = allDiagnoses["supSBP"].count()
+#%%
 def mean_sd_df(variable):
     dfDiagnoses = [allMSA, PD, DLB, PAF, RBD,MSAC, MSAP]
     Diagnoses = ["Overall", "all MSA", "PD", "DLB",  "PAF", "RBD", "MSA-C", "MSA-P"]
-    array = np.array([allDiagnoses[variable].mean(), allDiagnoses[variable].std()])
+    count = allDiagnoses[variable].count()
+    array = np.array([count, allDiagnoses[variable].mean(), allDiagnoses[
+        variable].std()])
     for diagnosis in dfDiagnoses:
-        row = np.array([diagnosis[variable].mean(), diagnosis[variable].std()])
+        count = diagnosis[variable].count()
+        row = np.array([count, diagnosis[variable].mean(), diagnosis[variable].std()])
         array = np.vstack((array, row))
-    mean_sd = pd.DataFrame(data = array, columns = ["Mean", "SD"], index = Diagnoses).round(2)
+    mean_sd = pd.DataFrame(data = array, columns = ["n","Mean", "SD"], index = Diagnoses).round(
+        2).applymap("{0:.2f}".format)
     return mean_sd
 #%%
 def anova_tukey(dataframe, column):
@@ -122,8 +128,9 @@ def anova_tukey(dataframe, column):
     df_pivot = df.pivot(columns = "ClinicalDiagnosis", values = column)
     data = [df_pivot[diagnosis].dropna().values for diagnosis in df_pivot]
     f_val, p_val = stats.f_oneway(*data)
+    anova_results = f_val, p_val
     tukey = pairwise_tukey(data=df, dv=column, between="ClinicalDiagnosis")
-    return p_val, tukey
+    return anova_results, tukey
 #%%
 def ttest_MSAs(variable):
     MSAC_clean = MSAC[variable].dropna()
@@ -133,16 +140,52 @@ def ttest_MSAs(variable):
     stat, pval = stats.ttest_ind(MSAC_array, MSAP_array)
     return stat, pval
 #%%
-mean_sd_dict = {}
-tukey_TiltTest = {}
-ttest_MSAs_dict = {}
-for variable in ["supSBP", "upSBP", "cSBP", "supDBP", "upDBP", "cDBP", "supHR", "upHR", "cHR", "supNE", "upNE", "cNE"]:
-    mean_sd_dict[variable] = mean_sd_df(variable)
-    tukey_TiltTest[variable] = anova_tukey(allDiagnosesGroupedMSA, variable)[1]
-    ttest_MSAs_dict[variable] = ttest_MSAs(variable)
+# Function to export a dataframe to .tex/.pdf
+def tukey_to_latex(dict, variable):
+    copy = dict["tukey"].copy()
+    copy[variable] = copy[variable].drop(columns=["hedges", "se", "T", "tail"])
+    for eachrow in copy[variable]["p-tukey"]:
+        copy[variable]["Significance"] = copy[variable]["p-tukey"].map(lambda eachrow: "n.s" if eachrow > 0.05 else "*" if 0.001 < eachrow <= 0.05 else "**")
 
-    print("p-values of ANOVA for the Tilt Test")
-    print(variable, anova_tukey(allDiagnosesGroupedMSA,variable)[0])
-    print("p-values of T-test for the Tilt Test between MSAC and MSAP")
-    print(variable, ttest_MSAs(variable)[1].round(3))
+    table_name = variable + ".tex"
+    beginningtex = """\\documentclass{report}
+    \\usepackage{booktabs}
+    \\usepackage{caption}
+    \\begin{document}
+    \\begin{center}
+    \\begin{table}[ht]
+    \\caption*{mycaption}
+    \\noindent\makebox[\\textwidth]{
+    """
+    endtex = """}
+    \\end{table}
+    \\end{center}
+    \\end{document}"""
 
+    f = open(table_name, 'w')
+    f.write(beginningtex)
+    f.write(copy[variable].to_latex(index=False, float_format="{:0.4f}".format, column_format="llccccc"))
+    f.write(endtex)
+    f.close()
+#%%
+# Creates a dictionary from dictionaries of each test performed for each variable. Exports Tukey-Kramer test ("tukey")
+# to .tex/.pdf
+def test_dict(array):
+    dict = {"mean_sd": {}, "tukey": {}, "ttest_MSAs": {}, "anova_results" : {}}
+    for variable in array:
+        dict["mean_sd"][variable] = mean_sd_df(variable)
+        dict["tukey"][variable] = anova_tukey(allDiagnosesGroupedMSA, variable)[1]
+        dict["ttest_MSAs"][variable] = ttest_MSAs(variable)
+        dict["anova_results"][variable] = anova_tukey(allDiagnosesGroupedMSA, variable)[0]
+
+        tukey_to_latex(dict, variable)
+    return dict
+#%%
+Neuro_dict = test_dict(["MOCA_Score", "UPSIT_Score"])
+#%%
+TiltTest_dict = test_dict(["supSBP", "upSBP", "cSBP", "supDBP", "upDBP", "cDBP", "supHR", "upHR", "cHR", "supNE",
+                           "upNE", "cNE"])
+#%%
+Autonomic_dict = test_dict(["ValsalvaRatio", "EIRatio"])
+#%%
+QOL_dict = test_dict(["QOL_Motor_Score", "QOL_NonMotor_Score", "QOL_Mood_Score", "QOL_Total_Score"])

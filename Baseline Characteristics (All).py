@@ -22,7 +22,7 @@ allDiagnoses.name="allDiagnoses"
 allDiagnosesGroupedMSA = allDiagnoses.copy()
 allDiagnosesGroupedMSA.ClinicalDiagnosis.replace(["MSAC", "MSAP"], ["MSA", "MSA"],
                                                                           inplace = True)
-allDiagnosesGroupedMSA.name = "allDiagnosesGroupedMSA"
+allDiagnosesGroupedMSA.name = "Overall"
 #%%
 def conditions(df):
     if (df["cSBP"]>=30) or (df["cDBP"]>=15):
@@ -37,6 +37,26 @@ def conditions(df):
         return None
 allDiagnoses["OH"]=allDiagnoses.apply(conditions, axis=1)
 allDiagnosesGroupedMSA["OH"] = allDiagnosesGroupedMSA.apply(conditions, axis=1)
+#%%
+def MOCA_23(df):
+    if (df["MOCA_Score"] < 23):
+        return 1
+    elif (df["MOCA_Score"] >= 23):
+        return 2
+    else:
+        return None
+allDiagnoses["MOCA_23"] = allDiagnoses.apply(MOCA_23, axis = 1)
+allDiagnosesGroupedMSA["MOCA_23"] = allDiagnosesGroupedMSA.apply(MOCA_23, axis = 1)
+#%%
+def UPSIT_18(df):
+    if (df["UPSIT_Score"] < 18):
+        return 1
+    elif (df["UPSIT_Score"] >= 18):
+        return 2
+    else:
+        return None
+allDiagnoses["UPSIT_18"] = allDiagnoses.apply(UPSIT_18, axis = 1)
+allDiagnosesGroupedMSA["UPSIT_18"] = allDiagnosesGroupedMSA.apply(UPSIT_18, axis = 1)
 #%%
 DLB = allDiagnoses.loc[lambda allDiagnoses: allDiagnoses["ClinicalDiagnosis"] == "DLB"]
 DLB.name = "DLB"
@@ -53,61 +73,86 @@ PAF = allDiagnoses.loc[lambda allDiagnoses: allDiagnoses["ClinicalDiagnosis"] ==
 PAF.name = "PAF"
 RBD = allDiagnoses.loc[lambda allDiagnoses: allDiagnoses["ClinicalDiagnosis"] == "RBD"]
 RBD.name = "RBD"
+
+list_of_diagnoses = [allDiagnosesGroupedMSA, allMSA, PD, DLB, PAF, RBD, MSAC, MSAP]
 #%%
-def OH(dataframe):
-    print(dataframe.name)
-    counts = dataframe["OH"].value_counts()
-    total = counts[1] + counts[2] + counts[3] + counts[4]
-    n30_15 = counts[1] + counts[2]
-    per30_15 = (((counts[1] + counts[2]) / dataframe["OH"].count()) *
-                                                        100).round(2)
-    n20_10 = counts[2]
-    per20_10 = ((counts[2] / dataframe["OH"].count()) * 100).round(2)
-    no_OH = total - n30_15
-    nSupHT = counts[3]
-    perSupHT = ((counts[3] / dataframe["OH"].count()) * 100).round(2)
-    no_SupHT = total - nSupHT
-    print("n30/15:", n30_15, "%30/15:", per30_15)
-    print("n20/10:", n20_10, "%20/10:", per20_10)
-    print("Supine HT:", nSupHT, perSupHT)
-    OH_array = [n30_15, no_OH]
-    SH_array = [nSupHT, no_SupHT]
-    return total, n30_15, per30_15, n20_10, per20_10, nSupHT, perSupHT, OH_array, SH_array
+def n_per_symptom(column):
+    df = pd.DataFrame()
+    for diagnosis in list_of_diagnoses:
+        counts = diagnosis[column].value_counts()
+        total = counts.sum()
+        try:
+            n = counts[1]
+        except KeyError:
+            n = 0
+
+        percent = ((n / total) * 100).round(2)
+        count_list = [n, percent]
+        df[diagnosis.name] = count_list
+    df = df.rename(index = {0 : "n", 1 : "%"})
+    return df
 #%%
-for dfs in [allDiagnosesGroupedMSA, allMSA, PD, DLB, PAF, RBD, MSAC, MSAP]:
-    OH(dfs)
+def chi2_cont(column):
+    df = pd.DataFrame()
+    for diagnosis in list_of_diagnoses:
+        counts = diagnosis[column].value_counts()
+        total = counts.sum()
+        try:
+            yes = counts[1]
+        except KeyError:
+            yes = 0
+
+        no = total - yes
+        yes_no = [yes, no]
+        df[diagnosis.name] = yes_no
+    df = df.rename(index={0: "yes", 1: "no"})
+    stat, pval, dof, expected = stats.chi2_contingency(observed=df)
+    return df, pval
 #%%
-OH_array = OH(allDiagnosesGroupedMSA)[7]
-OH_df = pd.DataFrame({'Overall': OH_array})
-for dfs in [allMSA, PD, DLB, PAF, RBD]:
-    df2 = pd.DataFrame({dfs.name : OH(dfs)[7]})
-    OH_df = OH_df.join(df2)
-OH_df = OH_df.rename(index = {0 : "has OH", 1 : "no OH"})
-stats.chi2_contingency(observed=OH_df)
+Neurological = {"N%" : {"MOCA < 23" : n_per_symptom("MOCA_23"), "UPSIT < 18" : n_per_symptom("UPSIT_18")}, "Chi-2" : {"MOCA < 23" : chi2_cont("MOCA_23"), "UPSIT < 18" : chi2_cont("UPSIT_18")}}
+Parkinsonism = {"N%" : {"Bradykinesia" : n_per_symptom("Bradykinesia"), "Rigidity" : n_per_symptom("Rigidity"),
+                  "Postural Instability" : n_per_symptom("Postural_Instability"), "Action Tremor" : n_per_symptom(
+        "ActionTremor"), "Resting Tremor" : n_per_symptom("RestingTremor"), "Levo-Induced Dyskinesia/Dystonia" :
+                         n_per_symptom("Dystonia")}, "Chi-2" : {"Bradykinesia" : chi2_cont("Bradykinesia"), "Rigidity" : chi2_cont("Rigidity"),
+                  "Postural Instability" : chi2_cont("Postural_Instability"), "Action Tremor" : chi2_cont(
+        "ActionTremor"), "Resting Tremor" : chi2_cont("RestingTremor"), "Levo-Induced Dyskinesia/Dystonia" :
+                         chi2_cont("Dystonia")}}
+Cerebellar = {"N%" : {"Gait Ataxia" : n_per_symptom("GaitAtaxia"), "Limb Ataxia" : n_per_symptom("LimbAtaxia"),
+                   "Ataxic Dysarthria" : n_per_symptom("AtaxicDysarthria")}, "Chi-2" : {"Gait Ataxia" : chi2_cont("GaitAtaxia"), "Limb Ataxia" : chi2_cont("LimbAtaxia"),
+                   "Ataxic Dysarthria" : chi2_cont("AtaxicDysarthria")}}
+Autonomic = {"N%" : {"Urinary Incontinence" : n_per_symptom("UrinaryIncontinence"), "Incomplete Bladder Emptying" :
+    n_per_symptom("IncompleteBladder"), "Constipation" : n_per_symptom("Constipation")}, "Chi-2" : {"Urinary Incontinence" : chi2_cont("UrinaryIncontinence"), "Incomplete Bladder Emptying" :
+    chi2_cont("IncompleteBladder"), "Constipation" : chi2_cont("Constipation")}}
 #%%
-SH_array = OH(allDiagnosesGroupedMSA)[8]
-SH_df = pd.DataFrame({'Overall': SH_array})
-for dfs in [allMSA, PD, DLB, PAF, RBD]:
-    df2 = pd.DataFrame({dfs.name : OH(dfs)[8]})
-    SH_df = SH_df.join(df2)
-SH_df = SH_df.rename(index = {0 : "has SH", 1 : "no SH"})
-stats.chi2_contingency(observed=SH_df)
-#%%
-OH_array_MSAs = OH(MSAC)[7]
-OH_df_MSA = pd.DataFrame({'MSA-C': OH_array})
-df_MSAP = pd.DataFrame({MSAP.name : OH(MSAP)[7]})
-OH_df_MSA = OH_df_MSA.join(df_MSAP)
-OH_df_MSA = OH_df_MSA.rename(index = {0 : "has OH", 1 : "no OH"})
-stats.chi2_contingency(observed=OH_df_MSA)
-#%%
-SH_array_MSAs = OH(MSAC)[8]
-SH_df_MSA = pd.DataFrame({'MSA-C': SH_array_MSAs})
-df_MSAP_sh = pd.DataFrame({MSAP.name : OH(MSAP)[8]})
-SH_df_MSA = SH_df_MSA.join(df_MSAP)
-SH_df_MSA = SH_df_MSA.rename(index = {0 : "has SH", 1 : "no SH"})
-stats.chi2_contingency(observed=SH_df_MSA)
-#%%
-count = allDiagnoses["supSBP"].count()
+def n_per_OH():
+    df30_15 = pd.DataFrame()
+    df20_10 = pd.DataFrame()
+    dfSH = pd.DataFrame()
+    for diagnosis in list_of_diagnoses:
+        counts = diagnosis["OH"].value_counts()
+        total = 0
+        for i in range(1, counts.size + 1):
+            total += counts[i]
+
+        n30_15 = counts[1] + counts[2]
+        per30_15 = ((n30_15 / total) * 100).round(2)
+        df30_15[diagnosis.name] = [n30_15, per30_15]
+
+        n20_10 = counts[2]
+        per20_10 = ((n20_10/ total) * 100).round(2)
+        df20_10[diagnosis.name] = [n20_10, per20_10]
+
+        nSH = counts[3]
+        perSH = ((nSH / total) * 100).round(2)
+        dfSH[diagnosis.name] = [nSH, perSH]
+
+    df30_15 = df30_15.rename(index={0: "n", 1: "%"})
+    df20_10 = df20_10.rename(index={0: "n", 1: "%"})
+    dfSH = dfSH.rename(index={0: "n", 1: "%"})
+    OH_nPER = {"30/15" : df30_15, "20/10" : df20_10, "SH": dfSH}
+    return OH_nPER
+
+OH_nPER = n_per_OH()
 #%%
 def mean_sd_df(variable):
     dfDiagnoses = [allMSA, PD, DLB, PAF, RBD,MSAC, MSAP]
@@ -140,7 +185,6 @@ def ttest_MSAs(variable):
     stat, pval = stats.ttest_ind(MSAC_array, MSAP_array)
     return stat, pval
 #%%
-# Function to export a dataframe to .tex/.pdf
 def tukey_to_latex(dict, variable):
     copy = dict["tukey"].copy()
     copy[variable] = copy[variable].drop(columns=["hedges", "se", "T", "tail"])
@@ -178,7 +222,7 @@ def test_dict(array):
         dict["ttest_MSAs"][variable] = ttest_MSAs(variable)
         dict["anova_results"][variable] = anova_tukey(allDiagnosesGroupedMSA, variable)[0]
 
-        tukey_to_latex(dict, variable)
+        #tukey_to_latex(dict, variable)
     return dict
 #%%
 Neuro_dict = test_dict(["MOCA_Score", "UPSIT_Score"])
@@ -189,3 +233,8 @@ TiltTest_dict = test_dict(["supSBP", "upSBP", "cSBP", "supDBP", "upDBP", "cDBP",
 Autonomic_dict = test_dict(["ValsalvaRatio", "EIRatio"])
 #%%
 QOL_dict = test_dict(["QOL_Motor_Score", "QOL_NonMotor_Score", "QOL_Mood_Score", "QOL_Total_Score"])
+#%%
+UMSARS_dict = test_dict(["UMSARS_1_Score", "UMSARS_2_Score"])
+#%%
+GDS_dict = test_dict(["UMSARS_4_DisabilityScale"])
+
